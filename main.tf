@@ -34,20 +34,26 @@ module "blog_vpc" {
   }
 }
 
-resource "aws_instance" "blog" {
-  ami           = data.aws_ami.app_ami.id
+
+module ="autoscaling" {
+  source = "terraform-aws-modules/autoscaling/aws"
+  version = "6.5.2"
+  name = "blog"
+  min_size = 1
+  max_size = 2
+
+  vpc_zone_identifier = module.blog_vpc.public_subnets
+  target_groups_arns  = module.blog_alb.target_groups_arns
+  security_groups = [module.blog_sg.security_group_id]
+
+  image_id = data.aws_ami.app_ami.id
   instance_type = var.instance_type
 
-  vpc_security_group_ids = [module.blog_sg.security_group_id]
 
-  subnet_id = module.blog_vpc.public_subnets[0]
 
-  tags = {
-    Name = "HelloWorld"
-  }
 }
 
-module "alb" {
+module "blog_alb" {
   source = "terraform-aws-modules/alb/aws"
 
   name    = "blog-alb"
@@ -55,30 +61,6 @@ module "alb" {
   subnets = module.blog_vpc.public_subnets
 
   security_groups = [module.blog_sg.security_group_id]
-
-  # Security Group
-  security_group_ingress_rules = {
-    all_http = {
-      from_port   = 80
-      to_port     = 80
-      ip_protocol = "tcp"
-      description = "HTTP web traffic"
-      cidr_ipv4   = "0.0.0.0/0"
-    }
-    all_https = {
-      from_port   = 443
-      to_port     = 443
-      ip_protocol = "tcp"
-      description = "HTTPS web traffic"
-      cidr_ipv4   = "0.0.0.0/0"
-    }
-  }
-  security_group_egress_rules = {
-    all = {
-      ip_protocol = "-1"
-      cidr_ipv4   = "10.0.0.0/16"
-    }
-  }
 
   listeners = {
     ex-http-https-redirect = {
@@ -111,6 +93,8 @@ module "alb" {
     Project     = "Example"
   }
 }
+
+
 
 module "blog_sg" {
   source = "terraform-aws-modules/security-group/aws"
